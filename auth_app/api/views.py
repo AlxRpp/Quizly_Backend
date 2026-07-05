@@ -2,6 +2,7 @@ from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
 )
+from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError
 from .serializers import RegisterUserSerializer
 from rest_framework.views import APIView
@@ -13,6 +14,8 @@ User = get_user_model()
 
 
 class RegisterUserView(APIView):
+    """Endpoint to create a new user account, no login needed for this one
+    (AllowAny)."""
     permission_classes = [AllowAny]
 
     def post(self, request):
@@ -26,6 +29,10 @@ class RegisterUserView(APIView):
 
 
 class LoginAndSetCookiesView(TokenObtainPairView):
+    """Login endpoint, uses simplejwt's normal login logic but then, instead
+    of giving back the tokens in the response body, we set them as httponly
+    cookies. That way the frontend never sees the raw tokens in javascript,
+    only the browser handles them automatically."""
     permission_classes = [AllowAny]
 
     def post(self, request, *args, **kwargs):
@@ -67,9 +74,18 @@ class LoginAndSetCookiesView(TokenObtainPairView):
 
 
 class LogoutAndDeleteCookiesView(APIView):
+    """Logout endpoint. We blacklist the refresh_token so it can never be
+    used again (even if someone copied it before logout), and also delete
+    both cookies so the browser forgets them."""
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
+        refresh_token = request.COOKIES.get("refresh_token")
+        if refresh_token:
+            try:
+                RefreshToken(refresh_token).blacklist()
+            except TokenError:
+                pass
         response = Response({
             "detail": "Log-Out successfully! All Tokens will be deleted. Refresh token is now invalid."
         }, status=status.HTTP_200_OK)
@@ -80,6 +96,11 @@ class LogoutAndDeleteCookiesView(APIView):
 
 
 class CookieTokenRefreshView(TokenRefreshView):
+    """Same idea like login: read the refresh_token from the cookie (not
+    from the request body like the normal simplejwt view does), check its
+    still valid (and not blacklisted), then set a fresh access_token
+    cookie."""
+
     def post(self, request, *args, **kwargs):
         refresh = request.COOKIES.get("refresh_token")
 

@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     # third_party
     'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist',
     # apps
     'auth_app',
     'quiz_app'

@@ -4,6 +4,8 @@ User = get_user_model()
 
 
 class Quiz(models.Model):
+    """One quiz that got generated from a youtube video, belongs to exactly
+    one user (owner)."""
     owner = models.ForeignKey(
         User, on_delete=models.CASCADE, related_name="quiz_owner")
     title = models.CharField(blank=False, null=False, max_length=255)
@@ -22,6 +24,8 @@ class Quiz(models.Model):
 
 
 class Question(models.Model):
+    """One single question that belongs to a quiz, with 4 answer options and
+    the correct answer."""
     quiz = models.ForeignKey(
         Quiz, on_delete=models.CASCADE, related_name='questions')
     question_title = models.CharField(blank=False, null=False, max_length=250)
