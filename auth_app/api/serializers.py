@@ -5,12 +5,12 @@ User = get_user_model()
 
 class RegisterUserSerializer(serializers.ModelSerializer):
     """Serializer for the register endpoint, takes username/email/password/
-    repeated_password and creates a new User out of it."""
-    repeated_password = serializers.CharField(write_only=True)
+    confirmed_password and creates a new User out of it."""
+    confirmed_password = serializers.CharField(write_only=True)
 
     class Meta:
         model = User
-        fields = ['username', 'email', 'password', 'repeated_password']
+        fields = ['username', 'email', 'password', 'confirmed_password']
         extra_kwargs = {
             'password': {
                 'write_only': True
@@ -20,8 +20,8 @@ class RegisterUserSerializer(serializers.ModelSerializer):
             }
         }
 
-    def validate_repeated_password(self, value):
-        """Check password and repeated_password are really the same, before
+    def validate_confirmed_password(self, value):
+        """Check password and confirmed_password are really the same, before
         we save anything to the db."""
         password = self.initial_data.get('password')
         if password and value and password != value:
