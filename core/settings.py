@@ -59,10 +59,20 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-CORS_ALLOWED_ORIGINS = os.environ.get("CORS_ALLOWED_ORIGINS", "").split(",")
-ALLOWED_HOSTS = os.environ.get(
-    "ALLOWED_HOSTS", "127.0.0.1,localhost").split(",")
-CSRF_TRUSTED_ORIGINS = os.environ.get("CSRF_TRUSTED_ORIGINS", "").split(",")
+def parse_env_list(value):
+    """Turn a comma-separated env value into a clean list of strings.
+    Tolerant of common mistakes like stray [], "" or extra whitespace
+    someone might accidentally type into their own .env file."""
+    cleaned = value.strip().strip("[]")
+    items = [item.strip().strip('"').strip("'") for item in cleaned.split(",")]
+    return [item for item in items if item]
+
+
+CORS_ALLOWED_ORIGINS = parse_env_list(os.environ.get("CORS_ALLOWED_ORIGINS", ""))
+ALLOWED_HOSTS = parse_env_list(
+    os.environ.get("ALLOWED_HOSTS", "127.0.0.1,localhost"))
+CSRF_TRUSTED_ORIGINS = parse_env_list(os.environ.get("CSRF_TRUSTED_ORIGINS", ""))
+CORS_ALLOW_CREDENTIALS = True
 
 ROOT_URLCONF = 'core.urls'
 
