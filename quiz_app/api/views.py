@@ -9,22 +9,22 @@ from ..models import Quiz
 
 
 class ListOrCreateQuizView(ListCreateAPIView):
-    """GET gives back all quizzes from the logged in user, POST creates a new
-    one from a youtube url (download audio, transcribe, let gemini build the
-    questions)."""
+    """List the request user's quizzes, or create a new one from a YouTube url."""
     serializer_class = QuizSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        """Only show quizzes that belong to the request user, not every
-        quiz in the whole db."""
         return Quiz.objects.filter(owner=self.request.user)
 
     def post(self, request, *args, **kwargs):
-        """Validate the url, then let utils.build_quiz_from_url do the heavy
-        work (yt-dlp, whisper, gemini). If something breaks in that
-        pipeline we just answer 500, its not really the users fault, more
-        like our external services."""
+        """Validate the url, then run utils.build_quiz_from_url
+        (yt-dlp -> whisper -> Gemini -> save).
+
+        Returns:
+            201 with the created quiz on success.
+            400 if the url isn't a valid YouTube url.
+            500 if the download/transcription/generation pipeline fails.
+        """
         input_serializer = ValidateInputURLSerializer(data=request.data)
         input_serializer.is_valid(raise_exception=True)
         canonical_url = input_serializer.validated_data["url"]
@@ -38,9 +38,11 @@ class ListOrCreateQuizView(ListCreateAPIView):
 
 
 class QuizDetailView(RetrieveUpdateDestroyAPIView):
-    """GET/PATCH/DELETE for one single quiz by id. queryset is NOT filtered
-    by owner on purpose, cause we want a real 403 when its not your quiz
-    (not just a 404) - the actual check for that happens in IsOwner."""
+    """Retrieve, update or delete a single quiz by id.
+
+    queryset is intentionally not filtered by owner, so a non-owner gets a
+    403 (via IsOwner) instead of a 404.
+    """
     queryset = Quiz.objects.all()
     serializer_class = QuizSerializer
     permission_classes = [IsAuthenticated, IsOwner]

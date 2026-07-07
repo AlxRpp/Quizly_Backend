@@ -10,18 +10,17 @@ from ..models import Quiz, Question
 
 
 class InvalidYouTubeURLError(Exception):
-    """Custom error, get raised when the given url is not a valid youtube link.
-    We use our own exception here instead of a generic one, so the serializer
-    can catch exactly this and nothing else (dont wanna hide other bugs)."""
+    """Raised when a given url is not a valid YouTube link."""
     pass
 
 
 def extract_youtube_id(url: str):
-    """Get the video id out of a youtube url. Works for the two common formats:
-    youtu.be/ID and youtube.com/watch?v=ID (also with extra query params like
-    timestamps). If none of the two match we raise InvalidYouTubeURLError.
-    We use urlparse instead of regex, its already splitting the url in clean
-    parts for us (netloc, path, query), way easier than doing it by hand."""
+    """Extract the video id from a youtu.be/ID or youtube.com/watch?v=ID url
+    (including urls with extra query params, e.g. timestamps).
+
+    Raises:
+        InvalidYouTubeURLError: if the url matches neither format.
+    """
     parsed = urlparse(url)
     if "youtu.be" in parsed.netloc:
         video_id = parsed.path.lstrip("/")
@@ -36,19 +35,17 @@ def extract_youtube_id(url: str):
 
 
 def build_canonical_url(video_id):
-    """Build back a clean, always-same youtube url from just the id. We need
-    this because the client can send us many different youtube url formats,
-    but in the db we always wanna save the SAME format (watch?v=ID)."""
+    """Build the canonical https://www.youtube.com/watch?v=<id> url from a video id."""
     return f"https://www.youtube.com/watch?v={video_id}"
 
 
 def download_audio(video_url):
-    """Download only the audio (not the whole video) from a youtube link with
-    yt-dlp, into a fresh temp folder. Important: we use tempfile.mkdtemp() and
-    NOT TemporaryDirectory() as a with-block, because that would delete the
-    file again before whisper even had the chance to read it! Gives back the
-    real file path afterwards, cause we dont know the extension before yt-dlp
-    decided it (m4a/webm/whatever)."""
+    """Download only the audio track of a YouTube video into a fresh temp
+    directory and return the resulting file path.
+
+    Uses tempfile.mkdtemp() rather than TemporaryDirectory(): the latter
+    would delete the directory before whisper gets a chance to read the file.
+    """
     tmp_dir = tempfile.mkdtemp()
     outtmpl = os.path.join(tmp_dir, "audio.%(ext)s")
 
@@ -64,19 +61,23 @@ def download_audio(video_url):
 
 
 def get_transcript(file_path):
-    """Take a local audio file and let whisper turn it into text. Model size
-    is "tiny" right now for fast testing, can be switched to "base"/"small"
-    later for better accuracy (costs more time then, tiny is fastest)."""
+    """Transcribe a local audio file to text via whisper.
+
+    Uses the "tiny" model for speed; swap for "base"/"small" for higher
+    accuracy at the cost of runtime.
+    """
     model = whisper.load_model("tiny")
     result = model.transcribe(file_path)
     return (result["text"])
 
 
 def get_questions(transcript):
-    """Send the transcript to gemini with a fixed prompt, so it gives back
-    exactly the quiz-json we need (title, description, 10 questions with 4
-    options each). Returns the RAW text from gemini, json.loads() still has
-    to happen somewhere after this (currently done in build_quiz_from_url)."""
+    """Send the transcript to Gemini and return the raw quiz JSON text
+    (title, description, 10 questions with 4 options each).
+
+    Returns:
+        str: raw text from Gemini, not yet parsed with json.loads().
+    """
     prompt = """
         Based on the following transcript, generate a quiz in valid JSON format.
         The quiz must follow this exact structure:
@@ -109,9 +110,8 @@ def get_questions(transcript):
 
 
 def create_quiz(user, canonical_url, quiz_data):
-    """Small helper, only saves the Quiz row in db (title/description come
-    from gemini, video_url from our own canonical url, owner from the
-    currently logged in user)."""
+    """Create and save a Quiz row from Gemini's quiz_data, the canonical
+    video url, and the owning user."""
     return Quiz.objects.create(
         owner=user,
         title=quiz_data["title"],
@@ -121,8 +121,7 @@ def create_quiz(user, canonical_url, quiz_data):
 
 
 def create_questions(quiz, questions_data):
-    """Saves all 10 Question rows for one quiz, one Question.objects.create()
-    call per question from the gemini answer."""
+    """Create and save one Question row per entry in questions_data."""
     for q in questions_data:
         Question.objects.create(
             quiz=quiz,
@@ -133,11 +132,15 @@ def create_questions(quiz, questions_data):
 
 
 def build_quiz_from_url(canonical_url, user):
-    """This is the main pipeline the view calls: download audio -> transcribe
-    -> ask gemini -> save everything in db. The temp folder from
-    download_audio always gets deleted in the finally-block, even if
-    something above crashes (whisper error, gemini error, invalid json,
-    whatever) - so we never leave audio files laying around on the server."""
+    """Run the full pipeline: download audio, transcribe, generate questions
+    via Gemini, then save the quiz and its questions.
+
+    The temp audio directory is always removed afterwards, even if a step
+    raises (whisper/Gemini/JSON errors).
+
+    Returns:
+        Quiz: the newly created quiz instance.
+    """
     tmp_dir = None
     try:
         audio_path = download_audio(canonical_url)

@@ -4,8 +4,7 @@ from .utils import extract_youtube_id, build_canonical_url, InvalidYouTubeURLErr
 
 
 class QuestionSerializer(serializers.ModelSerializer):
-    """Turns one Question object into json, only used nested inside
-    QuizSerializer, never on its own right now."""
+    """Serializes a Question; only used nested inside QuizSerializer."""
     created_at = serializers.DateTimeField(format="%Y-%m-%dT%H:%M:%SZ")
     updated_at = serializers.DateTimeField(format="%Y-%m-%dT%H:%M:%SZ")
 
@@ -16,10 +15,11 @@ class QuestionSerializer(serializers.ModelSerializer):
 
 
 class QuizSerializer(serializers.ModelSerializer):
-    """Main serializer for a quiz. Used as output for list/detail/create and
-    also as input for patch. created_at, updated_at and video_url are
-    read_only so a client cant overwrite them - only title and description
-    are meant to be changed via patch."""
+    """Serializer for a quiz (list/detail/create/patch).
+
+    created_at, updated_at and video_url are read_only; only title and
+    description can be changed via patch.
+    """
     questions = QuestionSerializer(many=True, read_only=True)
     created_at = serializers.DateTimeField(
         format="%Y-%m-%dT%H:%M:%SZ", read_only=True)
@@ -34,15 +34,15 @@ class QuizSerializer(serializers.ModelSerializer):
 
 
 class ValidateInputURLSerializer(serializers.Serializer):
-    """Only used for the create-quiz request, checks that the url field the
-    client sent is really a youtube url."""
+    """Validates that the client-supplied url is a YouTube url."""
     url = serializers.URLField()
 
     def validate_url(self, value):
-        """Take the raw url from the client, extract the video id out of it
-        and give back a clean canonical youtube url. If its not a youtube
-        url at all, this raises ValidationError so DRF answers 400
-        automatically, before we ever try to download anything."""
+        """Extract the video id and return its canonical YouTube url.
+
+        Raises:
+            ValidationError: if the url isn't a valid YouTube url.
+        """
         try:
             video_id = extract_youtube_id(value)
         except InvalidYouTubeURLError:

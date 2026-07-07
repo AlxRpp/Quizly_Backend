@@ -4,8 +4,7 @@ User = get_user_model()
 
 
 class RegisterUserSerializer(serializers.ModelSerializer):
-    """Serializer for the register endpoint, takes username/email/password/
-    confirmed_password and creates a new User out of it."""
+    """Creates a User from username/email/password/confirmed_password."""
     confirmed_password = serializers.CharField(write_only=True)
 
     class Meta:
@@ -21,8 +20,7 @@ class RegisterUserSerializer(serializers.ModelSerializer):
         }
 
     def validate_confirmed_password(self, value):
-        """Check password and confirmed_password are really the same, before
-        we save anything to the db."""
+        """Raises ValidationError if password and confirmed_password differ."""
         password = self.initial_data.get('password')
         if password and value and password != value:
             raise serializers.ValidationError(
@@ -30,17 +28,19 @@ class RegisterUserSerializer(serializers.ModelSerializer):
         return value
 
     def validate_email(self, value):
-        """Dont allow register with an email that already exist in the db."""
+        """Raises ValidationError if the email is already registered."""
         if User.objects.filter(email=value).exists():
             raise serializers.ValidationError(
                 {'error': 'email is already given'})
         return value
 
     def save(self):
-        """Overwrite the default save() because User.objects.create() cant
-        handle repeated_password (its not a real field on the User model),
-        and we need set_password() so the password gets hashed properly,
-        not saved as plain text."""
+        """Create the User with a hashed password via set_password().
+
+        Overrides the default save() because confirmed_password isn't a
+        real model field and ModelSerializer's default save() wouldn't
+        hash the password.
+        """
         pw = self.validated_data.get('password')
         account = User(
             email=self.validated_data['email'], username=self.validated_data.get(
